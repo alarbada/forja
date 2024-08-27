@@ -13,6 +13,8 @@ Forget about specs, forget about correct REST principles. You can run the
 example program at `cmd/` with `air`, and change the req / res json tags. You'll
 see that the scripts at `scripts/` typecheck on save.
 
+An [example app](https://github.com/alarbada/forja-solidjs-example)
+
 # TODO
 
 - [ ] Avoid repeating the same input / output type to make generated code slimmer
