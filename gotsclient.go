@@ -79,10 +79,9 @@ export interface ApiError {
 export type ApiResponse<T> =
   | { data: T; error: null }
   | { data: null; error: ApiError }
+
 `)
 
-	// Generate ApiClient interface
-	sb.WriteString("export interface ApiClient {\n")
 	packages := make(map[string]map[string]reflect.Type)
 	for fullPath, handlerType := range th.handlers {
 		parts := strings.Split(fullPath, ".")
@@ -98,6 +97,44 @@ export type ApiResponse<T> =
 		packages[simplifiedPackageName][handlerName] = handlerType
 	}
 
+	// Generate callbacks
+
+	for packageName, handlers := range packages {
+		for handlerName, handlerType := range handlers {
+			if handlerType.NumIn() < 2 || handlerType.NumOut() < 1 {
+				fmt.Printf("Warning: unexpected handler signature for %s.%s\n", packageName, handlerName)
+				continue
+			}
+
+			// input
+			inputType := handlerType.In(1)
+			inputTypeName := fmt.Sprint(packageName, handlerName, "Input")
+			fmt.Fprintf(&sb,
+				"export type %s = %s\n\n",
+				inputTypeName, generateTypescriptType(inputType),
+			)
+
+			// output
+			outputType := handlerType.Out(0)
+			outputTypeName := fmt.Sprint(packageName, handlerName, "Output")
+			fmt.Fprintf(&sb,
+				"export type %s = %s\n\n",
+				outputTypeName, generateTypescriptType(outputType),
+			)
+
+			// handler
+
+			handlerName := fmt.Sprint(packageName, handlerName, "Handler")
+			fmt.Fprintf(&sb,
+				"type %s = (params: %s) => Promise<ApiResponse<%s>>\n\n",
+				handlerName, inputTypeName, outputTypeName,
+			)
+		}
+
+	}
+
+	// Generate ApiClient interface
+	sb.WriteString("export interface ApiClient {\n")
 	for packageName, handlers := range packages {
 		sb.WriteString(fmt.Sprintf("  %s: {\n", packageName))
 		for handlerName, handlerType := range handlers {
@@ -105,12 +142,18 @@ export type ApiResponse<T> =
 				fmt.Printf("Warning: unexpected handler signature for %s.%s\n", packageName, handlerName)
 				continue
 			}
-			paramsType := handlerType.In(1)
-			returnType := handlerType.Out(0)
-			sb.WriteString(fmt.Sprintf("    %s: (params: %s) => Promise<ApiResponse<%s>>\n",
-				handlerName,
-				generateTypescriptType(paramsType),
-				generateTypescriptType(returnType)))
+
+			fmt.Fprintf(&sb,
+				"  %s: %s\n",
+				handlerName, packageName+handlerName+"Handler",
+			)
+
+			// paramsType := handlerType.In(1)
+			// returnType := handlerType.Out(0)
+			// sb.WriteString(fmt.Sprintf("    %s: (params: %s) => Promise<ApiResponse<%s>>\n",
+			// 	handlerName,
+			// 	generateTypescriptType(paramsType),
+			// 	generateTypescriptType(returnType)))
 		}
 		sb.WriteString("  }\n")
 	}

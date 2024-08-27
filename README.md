@@ -17,5 +17,5 @@ see that the scripts at `scripts/` typecheck on save.
 
 - [ ] Add adapters support, not `echo` only.
 - [ ] Generate type definition for each handler instead of inlining so that
-      typescript has easier time processing the file? Improves readability aswell
+      user can import individual type definitions.
 - [ ] Better docs. Maybe with website?
