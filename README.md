@@ -15,7 +15,6 @@ see that the scripts at `scripts/` typecheck on save.
 
 # TODO
 
+- [ ] Avoid repeating the same input / output type to make generated code slimmer
 - [ ] Add adapters support, not `echo` only.
-- [ ] Generate type definition for each handler instead of inlining so that
-      user can import individual type definitions.
 - [ ] Better docs. Maybe with website?
