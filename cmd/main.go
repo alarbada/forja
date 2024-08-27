@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/alarbada/gotsclient"
-	"github.com/alarbada/gotsclient/cmd/nested/pkg"
+	"github.com/alarbada/forja"
+	"github.com/alarbada/forja/cmd/nested/pkg"
 
 	"github.com/gookit/goutil/dump"
 	"github.com/labstack/echo/v4"
@@ -54,15 +54,15 @@ func getPlaylists(
 
 func main() {
 	e := echo.New()
-	th := gotsclient.NewTypedHandlers(e)
+	th := forja.NewTypedHandlers(e)
 
-	gotsclient.AddHandler(th, ExampleHandler1)
-	gotsclient.AddHandler(th, ExampleHandler2)
-	gotsclient.AddHandler(th, HelloWorld)
-	gotsclient.AddHandler(th, pkg.SomeHandler)
-	gotsclient.AddHandler(th, getPlaylists)
+	forja.AddHandler(th, ExampleHandler1)
+	forja.AddHandler(th, ExampleHandler2)
+	forja.AddHandler(th, HelloWorld)
+	forja.AddHandler(th, pkg.SomeHandler)
+	forja.AddHandler(th, getPlaylists)
 
-	gotsclient.WriteToFile(th, "scripts/apiclient.ts")
+	forja.WriteToFile(th, "scripts/apiclient.ts")
 
 	e.Logger.Fatal(e.Start(":8080"))
 }

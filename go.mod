@@ -2,7 +2,10 @@ module github.com/alarbada/forja
 
 go 1.23.0
 
-require github.com/labstack/echo/v4 v4.12.0
+require (
+	github.com/alarbada/forja v0.1.0
+	github.com/labstack/echo/v4 v4.12.0
+)
 
 require (
 	github.com/gookit/color v1.5.4 // indirect

@@ -6,10 +6,8 @@ export type ApiResponse<T> =
   | { data: T; error: null }
   | { data: null; error: ApiError }
 export interface ApiClient {
-  pkg: {
-    SomeHandler: (params: {}) => Promise<ApiResponse<string>>
-  }
   main: {
+    HelloWorld: (params: {}) => Promise<ApiResponse<string>>
     getPlaylists: (params: {}) => Promise<
       ApiResponse<
         {
@@ -43,17 +41,23 @@ export interface ApiClient {
         greeting: string
       }>
     >
-    HelloWorld: (params: {}) => Promise<ApiResponse<string>>
   }
-  beforeRequest(hook: (config: RequestInit) => void): void
+  pkg: {
+    SomeHandler: (params: {}) => Promise<ApiResponse<string>>
+  }
 }
 
-export const createApiClient = (baseUrl: string): ApiClient => {
-  let beforeRequestHook: ((config: RequestInit) => void) | null = null
+type ApiClientConfig = {
+  beforeRequest?: (config: RequestInit) => void | Promise<void>
+}
 
+export function createApiClient(
+  baseUrl: string,
+  config?: ApiClientConfig
+): ApiClient {
   async function doFetch(path: string, params: unknown) {
     try {
-      const config: RequestInit = {
+      const requestConfig: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -61,11 +65,11 @@ export const createApiClient = (baseUrl: string): ApiClient => {
         body: JSON.stringify(params),
       }
 
-      if (beforeRequestHook) {
-        beforeRequestHook(config)
+      if (config?.beforeRequest) {
+        await config.beforeRequest(requestConfig)
       }
 
-      const response = await fetch(`${baseUrl}/${path}`, config)
+      const response = await fetch(`${baseUrl}/${path}`, requestConfig)
       if (!response.ok) {
         return {
           data: null,
@@ -88,17 +92,14 @@ export const createApiClient = (baseUrl: string): ApiClient => {
     }
   }
   const client: ApiClient = {
-    pkg: {
-      SomeHandler: (params) => doFetch("pkg.SomeHandler", params),
-    },
     main: {
       ExampleHandler2: (params) => doFetch("main.ExampleHandler2", params),
       HelloWorld: (params) => doFetch("main.HelloWorld", params),
       getPlaylists: (params) => doFetch("main.getPlaylists", params),
       ExampleHandler1: (params) => doFetch("main.ExampleHandler1", params),
     },
-    beforeRequest: (hook) => {
-      beforeRequestHook = hook
+    pkg: {
+      SomeHandler: (params) => doFetch("pkg.SomeHandler", params),
     },
   }
   return client

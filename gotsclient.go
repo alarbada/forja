@@ -1,4 +1,4 @@
-package gotsclient
+package forja
 
 import (
 	"fmt"
@@ -114,18 +114,21 @@ export type ApiResponse<T> =
 		}
 		sb.WriteString("  }\n")
 	}
-	// Add beforeRequest method to ApiClient interface
-	sb.WriteString("  beforeRequest(hook: (config: RequestInit) => Promise<void>): void\n")
 	sb.WriteString("}\n")
 
 	// Generate createApiClient function
 	sb.WriteString(`
-export const createApiClient = (baseUrl: string): ApiClient => {
-  let beforeRequestHook: ((config: RequestInit) => Promise<void>) | null = null
+type ApiClientConfig = {
+  beforeRequest?: (config: RequestInit) => void | Promise<void>
+}
 
+export function createApiClient(
+  baseUrl: string,
+  config?: ApiClientConfig
+): ApiClient {
   async function doFetch(path: string, params: unknown) {
     try {
-      const config: RequestInit = {
+      const requestConfig: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -133,11 +136,11 @@ export const createApiClient = (baseUrl: string): ApiClient => {
         body: JSON.stringify(params),
       }
 
-      if (beforeRequestHook) {
-        await beforeRequestHook(config)
+      if (config?.beforeRequest) {
+        await config.beforeRequest(requestConfig)
       }
 
-      const response = await fetch(` + "`${baseUrl}/${path}`" + `, config)
+      const response = await fetch(` + "`${baseUrl}/${path}`" + `, requestConfig)
       if (!response.ok) {
         return {
           data: null,
@@ -170,12 +173,6 @@ export const createApiClient = (baseUrl: string): ApiClient => {
 		}
 		sb.WriteString("    },\n")
 	}
-
-	// Add beforeRequest method implementation
-	sb.WriteString(`    beforeRequest: (hook) => {
-      beforeRequestHook = hook
-    },
-`)
 
 	sb.WriteString(`  }
   return client

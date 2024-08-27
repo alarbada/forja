@@ -1,9 +1,9 @@
-# gotsclient
+# forja
 
-The easiest way to create typescript clients for go APIs
+The most straight forward way to create typescript clients for go APIs. Think of this as the tRPC equivalent, but in go.
 
 # Why not openapi?
 
-Because openapi is made to create generic API specifications. This is not the purpose of this project. This is meant to be the easiest way to create a front end typescript client from a defined go API.
+Basically, I wanted something much more simple and straight forward to use. This tool only serves one purpose: to generate a typescript api client from go code at runtime, and nothing else.
 
-Forget about specs, forget about correct REST principles. You could say that this is the tRPC equivalent, but in go. You can run the example program at `cmd/` with `air`, and change the req / res json tags. You'll see that the scripts at `scripts/` typecheck on save.
+Forget about specs, forget about correct REST principles. You can run the example program at `cmd/` with `air`, and change the req / res json tags. You'll see that the scripts at `scripts/` typecheck on save.

@@ -1,11 +1,11 @@
 import { createApiClient } from "./apiclient"
 
-const apiclient = createApiClient("http://localhost:8080")
-
-apiclient.beforeRequest((config: RequestInit) => {
-  if (config?.headers) {
-    config.headers["Authorization"] = "lol"
-  }
+const apiclient = createApiClient("http://localhost:8080", {
+  beforeRequest(config) {
+    if (config?.headers) {
+      config.headers["Authorization"] = "lol"
+    }
+  },
 })
 
 console.log(await apiclient.main.HelloWorld({ name: "asdfa" }))
