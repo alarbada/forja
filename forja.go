@@ -15,6 +15,16 @@ type Handler[P any, R any] func(c echo.Context, params P) (R, error)
 type TypedHandlers struct {
 	e        *echo.Echo
 	handlers map[string]reflect.Type // "package.handler" -> Handler type
+
+	OnErr func(error)
+}
+
+func NewTypedHandlersWithErrorHandler(e *echo.Echo, onErr func(error)) *TypedHandlers {
+	th := &TypedHandlers{
+		e:        e,
+		handlers: make(map[string]reflect.Type),
+	}
+	return th
 }
 
 func NewTypedHandlers(e *echo.Echo) *TypedHandlers {
@@ -58,6 +68,10 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 
 		result, err := handler(c, params)
 		if err != nil {
+			if th.OnErr != nil {
+				th.OnErr(err)
+			}
+
 			return c.JSON(400, map[string]string{
 				"message": err.Error(),
 			})
