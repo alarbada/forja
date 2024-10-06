@@ -185,12 +185,12 @@ export function createApiClient(
 
       const response = await fetch(` + "`${baseUrl}/${path}`" + `, requestConfig)
       if (!response.ok) {
+		const data = await response.json()
+		const message = data.message
+
         return {
           data: null,
-          error: {
-            message: await response.text(),
-            statusCode: response.status,
-          },
+          error: { message, statusCode: response.status },
         }
       }
       const data = await response.json()
