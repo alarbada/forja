@@ -188,7 +188,7 @@ export function createApiClient(
         return {
           data: null,
           error: {
-            message: "API request failed",
+            message: await response.text(),
             statusCode: response.status,
           },
         }
