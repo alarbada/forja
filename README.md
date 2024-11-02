@@ -15,6 +15,10 @@ see that the scripts at `scripts/` typecheck on save.
 
 An [example app](https://github.com/alarbada/forja-solidjs-example)
 
+# testing
+
+Run `go run ./cmd` to generate a `scripts/apiclient.ts`. Check that apiclient (integration tests coming soon)
+
 # TODO
 
 - [ ] Avoid repeating the same input / output type to make generated code slimmer

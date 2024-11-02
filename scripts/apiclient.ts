@@ -6,49 +6,17 @@ export type ApiResponse<T> =
   | { data: T; error: null }
   | { data: null; error: ApiError }
 
-export type mainExampleHandler1Input = {
-  name: string
-  users: {
-    name: string
-    age: number
-  }[]
-}
+export type MainHelloWorldInput = {}
 
-export type mainExampleHandler1Output = {
-  greeting: string
-}
+export type MainHelloWorldOutput = string
 
-type mainExampleHandler1Handler = (
-  params: mainExampleHandler1Input
-) => Promise<ApiResponse<mainExampleHandler1Output>>
+type MainHelloWorldHandler = (
+  params: MainHelloWorldInput,
+) => Promise<ApiResponse<MainHelloWorldOutput>>
 
-export type mainExampleHandler2Input = {
-  name: string
-  users: {
-    name: string
-    age: number
-  }[]
-}
+export type MainGetPlaylistsInput = {}
 
-export type mainExampleHandler2Output = {
-  greeting: string
-}
-
-type mainExampleHandler2Handler = (
-  params: mainExampleHandler2Input
-) => Promise<ApiResponse<mainExampleHandler2Output>>
-
-export type mainHelloWorldInput = {}
-
-export type mainHelloWorldOutput = string
-
-type mainHelloWorldHandler = (
-  params: mainHelloWorldInput
-) => Promise<ApiResponse<mainHelloWorldOutput>>
-
-export type maingetPlaylistsInput = {}
-
-export type maingetPlaylistsOutput = {
+export type MainGetPlaylistsOutput = {
   id?: string
   playlistId?: string
   title?: string
@@ -56,27 +24,59 @@ export type maingetPlaylistsOutput = {
   description?: string
 }[]
 
-type maingetPlaylistsHandler = (
-  params: maingetPlaylistsInput
-) => Promise<ApiResponse<maingetPlaylistsOutput>>
+type MainGetPlaylistsHandler = (
+  params: MainGetPlaylistsInput,
+) => Promise<ApiResponse<MainGetPlaylistsOutput>>
 
-export type pkgSomeHandlerInput = {}
+export type MainExampleHandler1Input = {
+  name: string
+  users: {
+    name: string
+    age: number
+  }[]
+}
 
-export type pkgSomeHandlerOutput = string
+export type MainExampleHandler1Output = {
+  greeting: string
+}
 
-type pkgSomeHandlerHandler = (
-  params: pkgSomeHandlerInput
-) => Promise<ApiResponse<pkgSomeHandlerOutput>>
+type MainExampleHandler1Handler = (
+  params: MainExampleHandler1Input,
+) => Promise<ApiResponse<MainExampleHandler1Output>>
+
+export type MainExampleHandler2Input = {
+  name: string
+  users: {
+    name: string
+    age: number
+  }[]
+}
+
+export type MainExampleHandler2Output = {
+  greeting: string
+}
+
+type MainExampleHandler2Handler = (
+  params: MainExampleHandler2Input,
+) => Promise<ApiResponse<MainExampleHandler2Output>>
+
+export type PkgSomeHandlerInput = {}
+
+export type PkgSomeHandlerOutput = string
+
+type PkgSomeHandlerHandler = (
+  params: PkgSomeHandlerInput,
+) => Promise<ApiResponse<PkgSomeHandlerOutput>>
 
 export interface ApiClient {
   main: {
-    ExampleHandler1: mainExampleHandler1Handler
-    ExampleHandler2: mainExampleHandler2Handler
-    HelloWorld: mainHelloWorldHandler
-    getPlaylists: maingetPlaylistsHandler
+    ExampleHandler1: MainExampleHandler1Handler
+    ExampleHandler2: MainExampleHandler2Handler
+    HelloWorld: MainHelloWorldHandler
+    getPlaylists: MainGetPlaylistsHandler
   }
   pkg: {
-    SomeHandler: pkgSomeHandlerHandler
+    SomeHandler: PkgSomeHandlerHandler
   }
 }
 
@@ -86,14 +86,14 @@ type ApiClientConfig = {
 
 export function createApiClient(
   baseUrl: string,
-  config?: ApiClientConfig
+  config?: ApiClientConfig,
 ): ApiClient {
   async function doFetch(path: string, params: unknown) {
     try {
       const requestConfig: RequestInit = {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(params),
       }
@@ -104,12 +104,12 @@ export function createApiClient(
 
       const response = await fetch(`${baseUrl}/${path}`, requestConfig)
       if (!response.ok) {
+        const data = await response.json()
+        const message = data.message
+
         return {
           data: null,
-          error: {
-            message: "API request failed",
-            statusCode: response.status,
-          },
+          error: { message, statusCode: response.status },
         }
       }
       const data = await response.json()
@@ -119,20 +119,20 @@ export function createApiClient(
         data: null,
         error: {
           message:
-            error instanceof Error ? error.message : "Unknown error occurred",
+            error instanceof Error ? error.message : 'Unknown error occurred',
         },
       }
     }
   }
   const client: ApiClient = {
     main: {
-      ExampleHandler1: (params) => doFetch("main.ExampleHandler1", params),
-      ExampleHandler2: (params) => doFetch("main.ExampleHandler2", params),
-      HelloWorld: (params) => doFetch("main.HelloWorld", params),
-      getPlaylists: (params) => doFetch("main.getPlaylists", params),
+      getPlaylists: (params) => doFetch('main.getPlaylists', params),
+      ExampleHandler1: (params) => doFetch('main.ExampleHandler1', params),
+      ExampleHandler2: (params) => doFetch('main.ExampleHandler2', params),
+      HelloWorld: (params) => doFetch('main.HelloWorld', params),
     },
     pkg: {
-      SomeHandler: (params) => doFetch("pkg.SomeHandler", params),
+      SomeHandler: (params) => doFetch('pkg.SomeHandler', params),
     },
   }
   return client

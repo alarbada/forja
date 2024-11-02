@@ -122,7 +122,7 @@ export type ApiResponse<T> =
 
 			// input
 			inputType := handlerType.In(1)
-			inputTypeName := fmt.Sprint(packageName, handlerName, "Input")
+			inputTypeName := camelcaseNames(packageName, handlerName, "Input")
 			fmt.Fprintf(&sb,
 				"export type %s = %s\n\n",
 				inputTypeName, generateTypescriptType(inputType),
@@ -130,21 +130,19 @@ export type ApiResponse<T> =
 
 			// output
 			outputType := handlerType.Out(0)
-			outputTypeName := fmt.Sprint(packageName, handlerName, "Output")
+			outputTypeName := camelcaseNames(packageName, handlerName, "Output")
 			fmt.Fprintf(&sb,
 				"export type %s = %s\n\n",
 				outputTypeName, generateTypescriptType(outputType),
 			)
 
 			// handler
-
-			handlerName := fmt.Sprint(packageName, handlerName, "Handler")
+			handlerName := camelcaseNames(packageName, handlerName, "Handler")
 			fmt.Fprintf(&sb,
 				"type %s = (params: %s) => Promise<ApiResponse<%s>>\n\n",
 				handlerName, inputTypeName, outputTypeName,
 			)
 		}
-
 	}
 
 	// Generate ApiClient interface
@@ -159,15 +157,8 @@ export type ApiResponse<T> =
 
 			fmt.Fprintf(&sb,
 				"  %s: %s\n",
-				handlerName, packageName+handlerName+"Handler",
+				handlerName, camelcaseNames(packageName, handlerName, "Handler"),
 			)
-
-			// paramsType := handlerType.In(1)
-			// returnType := handlerType.Out(0)
-			// sb.WriteString(fmt.Sprintf("    %s: (params: %s) => Promise<ApiResponse<%s>>\n",
-			// 	handlerName,
-			// 	generateTypescriptType(paramsType),
-			// 	generateTypescriptType(returnType)))
 		}
 		sb.WriteString("  }\n")
 	}
@@ -301,4 +292,13 @@ func parseJSONTag(tag string) (string, bool) {
 func WriteToFile(th *TypedHandlers, filename string) error {
 	generated := []byte(th.GenerateTypescriptClient())
 	return os.WriteFile(filename, generated, 0644)
+}
+
+func camelcaseNames(names ...string) string {
+	for i, name := range names {
+		if len(name) > 0 {
+			names[i] = strings.ToUpper(name[:1]) + name[1:]
+		}
+	}
+	return strings.Join(names, "")
 }
