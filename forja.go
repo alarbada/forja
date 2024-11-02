@@ -22,16 +22,14 @@ type TypedHandlers struct {
 func NewTypedHandlersWithErrorHandler(e *echo.Echo, onErr func(error)) *TypedHandlers {
 	th := &TypedHandlers{
 		e:        e,
+		OnErr:    onErr,
 		handlers: make(map[string]reflect.Type),
 	}
 	return th
 }
 
 func NewTypedHandlers(e *echo.Echo) *TypedHandlers {
-	return &TypedHandlers{
-		e:        e,
-		handlers: make(map[string]reflect.Type),
-	}
+	return NewTypedHandlersWithErrorHandler(e, nil)
 }
 
 func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
@@ -96,7 +94,17 @@ export type ApiResponse<T> =
 
 `)
 
-	packages := make(map[string]map[string]reflect.Type)
+	type PackageName = string
+	type HandlerName = string
+	type Handler struct {
+		isInputEmpty bool
+		handlerType  reflect.Type
+	}
+
+	// Handler is a pointer so that we can update isInputEmpty later.
+	type Packages = map[PackageName]map[HandlerName]*Handler
+
+	packages := make(Packages)
 	for fullPath, handlerType := range th.handlers {
 		parts := strings.Split(fullPath, ".")
 		if len(parts) != 2 {
@@ -106,30 +114,38 @@ export type ApiResponse<T> =
 		packageParts := strings.Split(packageName, "/")
 		simplifiedPackageName := packageParts[len(packageParts)-1]
 		if packages[simplifiedPackageName] == nil {
-			packages[simplifiedPackageName] = make(map[string]reflect.Type)
+			packages[simplifiedPackageName] = make(map[HandlerName]*Handler)
 		}
-		packages[simplifiedPackageName][handlerName] = handlerType
+		packages[simplifiedPackageName][handlerName] = &Handler{
+			isInputEmpty: false,
+			handlerType:  handlerType,
+		}
 	}
 
 	// Generate callbacks
 
 	for packageName, handlers := range packages {
-		for handlerName, handlerType := range handlers {
-			if handlerType.NumIn() < 2 || handlerType.NumOut() < 1 {
+		for handlerName, handler := range handlers {
+			if handler.handlerType.NumIn() < 2 || handler.handlerType.NumOut() < 1 {
 				fmt.Printf("Warning: unexpected handler signature for %s.%s\n", packageName, handlerName)
 				continue
 			}
 
 			// input
-			inputType := handlerType.In(1)
-			inputTypeName := camelcaseNames(packageName, handlerName, "Input")
-			fmt.Fprintf(&sb,
-				"export type %s = %s\n\n",
-				inputTypeName, generateTypescriptType(inputType),
-			)
+			inputType := handler.handlerType.In(1)
+			var inputTypeName string
+			if inputType.Kind() == reflect.Struct && inputType.NumField() != 0 {
+				inputTypeName = camelcaseNames(packageName, handlerName, "Input")
+				fmt.Fprintf(&sb,
+					"export type %s = %s\n\n",
+					inputTypeName, generateTypescriptType(inputType),
+				)
+			} else {
+				handler.isInputEmpty = true
+			}
 
 			// output
-			outputType := handlerType.Out(0)
+			outputType := handler.handlerType.Out(0)
 			outputTypeName := camelcaseNames(packageName, handlerName, "Output")
 			fmt.Fprintf(&sb,
 				"export type %s = %s\n\n",
@@ -137,11 +153,19 @@ export type ApiResponse<T> =
 			)
 
 			// handler
-			handlerName := camelcaseNames(packageName, handlerName, "Handler")
-			fmt.Fprintf(&sb,
-				"type %s = (params: %s) => Promise<ApiResponse<%s>>\n\n",
-				handlerName, inputTypeName, outputTypeName,
-			)
+			if inputTypeName != "" {
+				handlerName := camelcaseNames(packageName, handlerName, "Handler")
+				fmt.Fprintf(&sb,
+					"type %s = (params: %s) => Promise<ApiResponse<%s>>\n\n",
+					handlerName, inputTypeName, outputTypeName,
+				)
+			} else {
+				handlerName := camelcaseNames(packageName, handlerName, "Handler")
+				fmt.Fprintf(&sb,
+					"type %s = () => Promise<ApiResponse<%s>>\n\n",
+					handlerName, outputTypeName,
+				)
+			}
 		}
 	}
 
@@ -149,7 +173,8 @@ export type ApiResponse<T> =
 	sb.WriteString("export interface ApiClient {\n")
 	for packageName, handlers := range packages {
 		sb.WriteString(fmt.Sprintf("  %s: {\n", packageName))
-		for handlerName, handlerType := range handlers {
+		for handlerName, handler := range handlers {
+			handlerType := handler.handlerType
 			if handlerType.NumIn() < 2 || handlerType.NumOut() < 1 {
 				fmt.Printf("Warning: unexpected handler signature for %s.%s\n", packageName, handlerName)
 				continue
@@ -174,14 +199,18 @@ export function createApiClient(
   baseUrl: string,
   config?: ApiClientConfig
 ): ApiClient {
-  async function doFetch(path: string, params: unknown) {
+  async function doFetch(path: string, params?: unknown) {
     try {
+	  if (params === undefined) {
+	  	params = {}
+	  }
+
       const requestConfig: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(params),
+        body: JSON.stringify(params ?? {}),
       }
 
       if (config?.beforeRequest) {
@@ -190,8 +219,8 @@ export function createApiClient(
 
       const response = await fetch(` + "`${baseUrl}/${path}`" + `, requestConfig)
       if (!response.ok) {
-		const data = await response.json()
-		const message = data.message
+        const data = await response.json()
+        const message = data.message
 
         return {
           data: null,
@@ -216,8 +245,19 @@ export function createApiClient(
 	// Generate client methods
 	for packageName, handlers := range packages {
 		sb.WriteString(fmt.Sprintf("    %s: {\n", packageName))
-		for handlerName := range handlers {
-			sb.WriteString(fmt.Sprintf("      %s: (params) => doFetch(\"%s.%s\", params),\n", handlerName, packageName, handlerName))
+		for handlerName, handler := range handlers {
+			var callback string
+			if handler.isInputEmpty {
+				callback = fmt.Sprintf(
+					"      %s: () => doFetch(\"%s.%s\"),\n",
+					handlerName, packageName, handlerName)
+			} else {
+				callback = fmt.Sprintf(
+					"      %s: (params) => doFetch(\"%s.%s\", params),\n",
+					handlerName, packageName, handlerName)
+			}
+
+			sb.WriteString(callback)
 		}
 		sb.WriteString("    },\n")
 	}

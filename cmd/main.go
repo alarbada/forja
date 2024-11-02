@@ -46,9 +46,7 @@ type Playlist struct {
 	Description string `json:"description,omitempty"`
 }
 
-func getPlaylists(
-	c echo.Context, i *struct{},
-) ([]Playlist, error) {
+func getPlaylists(c echo.Context, _ struct{}) ([]Playlist, error) {
 	return nil, nil
 }
 
