@@ -294,7 +294,7 @@ func generateTypescriptType(t reflect.Type) string {
 		sb.WriteString("  }")
 		return sb.String()
 	case reflect.Slice, reflect.Array:
-		return generateTypescriptType(t.Elem()) + "[]"
+		return ("(" + generateTypescriptType(t.Elem()) + "[] | null)")
 	case reflect.Ptr:
 		return generateTypescriptType(t.Elem())
 	case reflect.String:
