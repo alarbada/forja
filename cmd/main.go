@@ -34,6 +34,10 @@ func ExampleHandler2(c echo.Context, params ExampleParams) (*ExampleResponse, er
 	return &ExampleResponse{Greeting: "Hello, " + params.Name}, nil
 }
 
+func ExampleWithExternalTypes(c echo.Context, params pkg.Type2) (*pkg.Type1, error) {
+	return nil, nil
+}
+
 func HelloWorld(c echo.Context, params struct{}) (string, error) {
 	return "hello world", nil
 }
@@ -59,6 +63,7 @@ func main() {
 	forja.AddHandler(th, HelloWorld)
 	forja.AddHandler(th, pkg.SomeHandler)
 	forja.AddHandler(th, getPlaylists)
+	forja.AddHandler(th, ExampleWithExternalTypes)
 
 	forja.WriteToFile(th, "scripts/apiclient.ts")
 
