@@ -73,7 +73,7 @@ func fillTypeDefinitions(t reflect.Type) string {
 		return fmt.Sprintf("{\n%s\n}", strings.Join(fields, "\n"))
 
 	case reflect.Slice:
-		return fillTypeDefinitions(t.Elem()) + "[]"
+		return ("(" + fillTypeDefinitions(t.Elem()) + "[] | null)")
 
 	case reflect.String:
 		return "string"
