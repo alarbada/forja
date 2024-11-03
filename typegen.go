@@ -40,15 +40,14 @@ func fillTypeDefinitions(t reflect.Type) string {
 			var fields []string
 			for i := 0; i < t.NumField(); i++ {
 				field := t.Field(i)
+				fieldName := field.Name
 				jsonTag := field.Tag.Get("json")
-				if jsonTag == "" {
-					jsonTag = strings.ToLower(field.Name)
-				} else {
-					jsonTag = strings.Split(jsonTag, ",")[0]
+				if jsonTag != "" {
+					fieldName = strings.Split(jsonTag, ",")[0]
 				}
 
 				fieldType := fillTypeDefinitions(field.Type)
-				fields = append(fields, fmt.Sprintf("  %s: %s", jsonTag, fieldType))
+				fields = append(fields, fmt.Sprintf("  %s: %s", fieldName, fieldType))
 			}
 
 			typeDefinitions[fullName] = fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n"))
