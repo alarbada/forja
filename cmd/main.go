@@ -38,8 +38,14 @@ func ExampleWithExternalTypes(c echo.Context, params pkg.Type2) (*pkg.Type1, err
 	return nil, nil
 }
 
-func HelloWorld(c echo.Context, params struct{}) (string, error) {
-	return "hello world", nil
+type HelloWorldOutput struct {
+	Result string `json:"result"`
+}
+
+func HelloWorld(c echo.Context, params struct{}) (*HelloWorldOutput, error) {
+	return &HelloWorldOutput{
+		Result: "hello world",
+	}, nil
 }
 
 type Playlist struct {

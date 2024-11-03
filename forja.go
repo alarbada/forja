@@ -80,10 +80,10 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 }
 
 func (th *TypedHandlers) GenerateTypescriptClient() string {
-	var sb strings.Builder
+	output := new(strings.Builder)
 
 	// Generate ApiError type and ApiResponse type
-	sb.WriteString(`
+	output.WriteString(`
 export interface ApiError {
   message: string
   statusCode?: number
@@ -122,75 +122,53 @@ export type ApiResponse<T> =
 		}
 	}
 
-	// Generate callbacks
+	type HandlerTsType = string
+	apiClientTsDefinitions := map[PackageName]map[HandlerName]HandlerTsType{}
 
 	for packageName, handlers := range packages {
 		for handlerName, handler := range handlers {
-			if handler.handlerType.NumIn() < 2 || handler.handlerType.NumOut() < 1 {
-				fmt.Printf("Warning: unexpected handler signature for %s.%s\n", packageName, handlerName)
-				continue
-			}
-
-			// input
+			_, _, _ = packageName, handlerName, handler.handlerType
 			inputType := handler.handlerType.In(1)
-			var inputTypeName string
-			if inputType.Kind() == reflect.Struct && inputType.NumField() != 0 {
-				inputTypeName = camelcaseNames(packageName, handlerName, "Input")
-				fmt.Fprintf(&sb,
-					"export type %s = %s\n\n",
-					inputTypeName, generateTypescriptType(inputType),
-				)
+			outputType := handler.handlerType.Out(0).Elem()
+			inputTypeName := fillTypeDefinitions(inputType)
+			outputTypeName := fillTypeDefinitions(outputType)
+
+			handlerTsName := camelcaseNames(packageName, handlerName, "Handler")
+
+			isInputEmptyStruct := inputType.Kind() == reflect.Struct && inputType.NumField() == 0
+			if isInputEmptyStruct {
+				packages[packageName][handlerName].isInputEmpty = true
+				fmt.Fprintf(output,
+					"type %s = () => Promise<ApiResponse<%s>>\n",
+					handlerTsName, outputTypeName)
 			} else {
-				handler.isInputEmpty = true
+				fmt.Fprintf(output,
+					"type %s = (params: %s) => Promise<ApiResponse<%s>>\n",
+					handlerTsName, inputTypeName, outputTypeName)
 			}
 
-			// output
-			outputType := handler.handlerType.Out(0)
-			outputTypeName := camelcaseNames(packageName, handlerName, "Output")
-			fmt.Fprintf(&sb,
-				"export type %s = %s\n\n",
-				outputTypeName, generateTypescriptType(outputType),
-			)
-
-			// handler
-			if inputTypeName != "" {
-				handlerName := camelcaseNames(packageName, handlerName, "Handler")
-				fmt.Fprintf(&sb,
-					"type %s = (params: %s) => Promise<ApiResponse<%s>>\n\n",
-					handlerName, inputTypeName, outputTypeName,
-				)
-			} else {
-				handlerName := camelcaseNames(packageName, handlerName, "Handler")
-				fmt.Fprintf(&sb,
-					"type %s = () => Promise<ApiResponse<%s>>\n\n",
-					handlerName, outputTypeName,
-				)
+			if apiClientTsDefinitions[packageName] == nil {
+				apiClientTsDefinitions[packageName] = map[string]string{}
 			}
+
+			apiClientTsDefinitions[packageName][handlerName] = handlerTsName
 		}
 	}
 
-	// Generate ApiClient interface
-	sb.WriteString("export interface ApiClient {\n")
-	for packageName, handlers := range packages {
-		sb.WriteString(fmt.Sprintf("  %s: {\n", packageName))
-		for handlerName, handler := range handlers {
-			handlerType := handler.handlerType
-			if handlerType.NumIn() < 2 || handlerType.NumOut() < 1 {
-				fmt.Printf("Warning: unexpected handler signature for %s.%s\n", packageName, handlerName)
-				continue
-			}
-
-			fmt.Fprintf(&sb,
-				"  %s: %s\n",
-				handlerName, camelcaseNames(packageName, handlerName, "Handler"),
-			)
+	fmt.Fprintln(output, "type ApiClient = {")
+	for packageName, packageTypeDef := range apiClientTsDefinitions {
+		fmt.Fprintln(output, "  ", packageName, ": {")
+		for handlerName, handlerTypeName := range packageTypeDef {
+			fmt.Fprintln(output, "    ", handlerName, ": ", handlerTypeName, ",")
 		}
-		sb.WriteString("  }\n")
+		fmt.Fprintln(output, "  ", "},")
 	}
-	sb.WriteString("}\n")
+	fmt.Fprintln(output, "}")
+
+	printTypeDefs(output)
 
 	// Generate createApiClient function
-	sb.WriteString(`
+	output.WriteString(`
 type ApiClientConfig = {
   beforeRequest?: (config: RequestInit) => void | Promise<void>
 }
@@ -244,7 +222,7 @@ export function createApiClient(
 
 	// Generate client methods
 	for packageName, handlers := range packages {
-		sb.WriteString(fmt.Sprintf("    %s: {\n", packageName))
+		output.WriteString(fmt.Sprintf("    %s: {\n", packageName))
 		for handlerName, handler := range handlers {
 			var callback string
 			if handler.isInputEmpty {
@@ -257,76 +235,17 @@ export function createApiClient(
 					handlerName, packageName, handlerName)
 			}
 
-			sb.WriteString(callback)
+			output.WriteString(callback)
 		}
-		sb.WriteString("    },\n")
+		output.WriteString("    },\n")
 	}
 
-	sb.WriteString(`  }
+	output.WriteString(`  }
   return client
 }
 `)
 
-	return sb.String()
-}
-
-func generateTypescriptType(t reflect.Type) string {
-	switch t.Kind() {
-	case reflect.Struct:
-		var sb strings.Builder
-		sb.WriteString("{\n")
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
-			fieldName, optional := parseJSONTag(field.Tag.Get("json"))
-			if fieldName == "-" {
-				continue // Skip fields with json:"-"
-			}
-			if fieldName == "" {
-				fieldName = field.Name
-			}
-			fieldType := generateTypescriptType(field.Type)
-			if optional {
-				sb.WriteString(fmt.Sprintf("    %s?: %s\n", fieldName, fieldType))
-			} else {
-				sb.WriteString(fmt.Sprintf("    %s: %s\n", fieldName, fieldType))
-			}
-		}
-		sb.WriteString("  }")
-		return sb.String()
-	case reflect.Slice, reflect.Array:
-		return ("(" + generateTypescriptType(t.Elem()) + "[] | null)")
-	case reflect.Ptr:
-		return generateTypescriptType(t.Elem())
-	case reflect.String:
-		return "string"
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64:
-		return "number"
-	case reflect.Bool:
-		return "boolean"
-	case reflect.Interface:
-		return "any"
-	default:
-		return "unknown"
-	}
-}
-
-func parseJSONTag(tag string) (string, bool) {
-	if tag == "" {
-		return "", false
-	}
-	parts := strings.Split(tag, ",")
-	name := parts[0]
-	if name == "" {
-		return "", false
-	}
-	for _, opt := range parts[1:] {
-		if opt == "omitempty" {
-			return name, true
-		}
-	}
-	return name, false
+	return output.String()
 }
 
 func WriteToFile(th *TypedHandlers, filename string) error {
