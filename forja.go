@@ -79,6 +79,11 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 	})
 }
 
+func (th *TypedHandlers) WriteTsClient(path string) error {
+	generated := th.GenerateTypescriptClient()
+	return os.WriteFile(path, []byte(generated), 0644)
+}
+
 func (th *TypedHandlers) GenerateTypescriptClient() string {
 	output := new(strings.Builder)
 
