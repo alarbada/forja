@@ -60,6 +60,12 @@ func getPlaylists(c echo.Context, _ struct{}) ([]Playlist, error) {
 	return nil, nil
 }
 
+type Server struct{}
+
+func (s Server) theHandler(c echo.Context, input *struct{}) (*struct{}, error) {
+	return nil, nil
+}
+
 func main() {
 	e := echo.New()
 	th := forja.NewTypedHandlers(e)
@@ -70,6 +76,9 @@ func main() {
 	forja.AddHandler(th, pkg.SomeHandler)
 	forja.AddHandler(th, getPlaylists)
 	forja.AddHandler(th, ExampleWithExternalTypes)
+
+	server := Server{}
+	forja.AddHandler(th, server.theHandler)
 
 	forja.WriteToFile(th, "scripts/apiclient.ts")
 

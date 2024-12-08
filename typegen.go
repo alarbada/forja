@@ -24,7 +24,9 @@ func getFullTypeName(t reflect.Type) string {
 	// Get just the last part of the package path
 	pkgParts := strings.Split(t.PkgPath(), "/")
 	pkg := pkgParts[len(pkgParts)-1]
-	return fmt.Sprintf("%s_%s", pkg, t.Name())
+
+	name := fmt.Sprintf("%s_%s", pkg, t.Name())
+	return name
 }
 
 func fillTypeDefinitions(t reflect.Type) string {

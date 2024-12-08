@@ -36,22 +36,15 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 	handlerFunc := runtime.FuncForPC(reflect.ValueOf(handler).Pointer())
 	fullName := handlerFunc.Name()
 
-	parts := strings.Split(fullName, ".")
+	// Explanation for this "-fm" thingy
+	// https://github.com/golang/go/issues/52809#issuecomment-1122696583
+	fullName = strings.TrimSuffix(fullName, "-fm")
 
-	// Ensure we have at least two parts (package and function name)
-	if len(parts) < 2 {
-		panic("Invalid function name format")
-	}
+	parts := strings.Split(fullName, "/")
+	parts = strings.Split(parts[len(parts)-1], ".")
 
-	packageName := parts[len(parts)-2]
-	{
-		parts := strings.Split(packageName, "/")
-		if len(parts) > 0 {
-			packageName = parts[len(parts)-1]
-		}
-	}
-
-	handlerName := parts[len(parts)-1]
+	packageName := parts[0]
+	handlerName := strings.Join(parts[1:], "_")
 
 	path := fmt.Sprintf("/%s.%s", packageName, handlerName)
 	fullPath := fmt.Sprintf("%s.%s", packageName, handlerName)
