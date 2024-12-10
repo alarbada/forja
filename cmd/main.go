@@ -66,6 +66,14 @@ func (s Server) theHandler(c echo.Context, input *struct{}) (*struct{}, error) {
 	return nil, nil
 }
 
+type Node struct {
+	Children []Node
+}
+
+func circular(c echo.Context, input *struct{}) (*Node, error) {
+	return nil, nil
+}
+
 func main() {
 	e := echo.New()
 	th := forja.NewTypedHandlers(e)
@@ -79,6 +87,7 @@ func main() {
 
 	server := Server{}
 	forja.AddHandler(th, server.theHandler)
+	forja.AddHandler(th, circular)
 
 	forja.WriteToFile(th, "scripts/apiclient.ts")
 

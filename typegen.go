@@ -7,6 +7,7 @@ import (
 )
 
 var typeDefinitions = make(map[string]string)
+var processingTypes = make(map[string]bool)
 
 func printTypeDefs(sb *strings.Builder) {
 	for _, typedef := range typeDefinitions {
@@ -21,10 +22,8 @@ func getFullTypeName(t reflect.Type) string {
 	if t.PkgPath() == "" {
 		return t.Name()
 	}
-	// Get just the last part of the package path
 	pkgParts := strings.Split(t.PkgPath(), "/")
 	pkg := pkgParts[len(pkgParts)-1]
-
 	name := fmt.Sprintf("%s_%s", pkg, t.Name())
 	return name
 }
@@ -34,11 +33,18 @@ func fillTypeDefinitions(t reflect.Type) string {
 	case reflect.Struct:
 		fullName := getFullTypeName(t)
 		if fullName != "" {
+			// Check if we're already processing this type (circular reference)
+			if processingTypes[fullName] {
+				return fullName // Just return the type name for circular references
+			}
+
 			if _, exists := typeDefinitions[fullName]; exists {
 				return fullName
 			}
 
-			// Generate the type definition
+			// Mark this type as being processed
+			processingTypes[fullName] = true
+
 			var fields []string
 			for i := 0; i < t.NumField(); i++ {
 				field := t.Field(i)
@@ -47,13 +53,14 @@ func fillTypeDefinitions(t reflect.Type) string {
 				if jsonTag != "" {
 					fieldName = strings.Split(jsonTag, ",")[0]
 				}
-
 				fieldType := fillTypeDefinitions(field.Type)
 				fields = append(fields, fmt.Sprintf("  %s: %s", fieldName, fieldType))
 			}
 
-			typeDefinitions[fullName] = fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n"))
+			// Remove from processing map after we're done
+			delete(processingTypes, fullName)
 
+			typeDefinitions[fullName] = fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n"))
 			return fullName
 		}
 
@@ -67,29 +74,23 @@ func fillTypeDefinitions(t reflect.Type) string {
 			} else {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
-
 			fieldType := fillTypeDefinitions(field.Type)
 			fields = append(fields, fmt.Sprintf("  %s: %s", jsonTag, fieldType))
 		}
 		return fmt.Sprintf("{\n%s\n}", strings.Join(fields, "\n"))
 
 	case reflect.Slice:
-		return ("(" + fillTypeDefinitions(t.Elem()) + "[] | null)")
-
+		return fmt.Sprintf("(%s[] | null)", fillTypeDefinitions(t.Elem()))
 	case reflect.String:
 		return "string"
-
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 		reflect.Float32, reflect.Float64:
 		return "number"
-
 	case reflect.Bool:
 		return "boolean"
-
 	case reflect.Ptr:
 		return fillTypeDefinitions(t.Elem())
-
 	default:
 		return "any"
 	}
