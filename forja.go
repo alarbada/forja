@@ -32,6 +32,14 @@ func NewTypedHandlers(e *echo.Echo) *TypedHandlers {
 	return NewTypedHandlersWithErrorHandler(e, nil)
 }
 
+func cleanHandlerName(handlerName string) string {
+	handlerName = strings.ReplaceAll(handlerName, "(", "")
+	handlerName = strings.ReplaceAll(handlerName, ")", "")
+	handlerName = strings.ReplaceAll(handlerName, "*", "")
+
+	return handlerName
+}
+
 func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 	handlerFunc := runtime.FuncForPC(reflect.ValueOf(handler).Pointer())
 	fullName := handlerFunc.Name()
@@ -45,6 +53,11 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 
 	packageName := parts[0]
 	handlerName := strings.Join(parts[1:], "_")
+
+	// if handler is a method of a struct pointer, we need to clean it, as it
+	// will come in the form of:
+	// (*Mystruct)_methodName
+	handlerName = cleanHandlerName(handlerName)
 
 	path := fmt.Sprintf("/%s.%s", packageName, handlerName)
 	fullPath := fmt.Sprintf("%s.%s", packageName, handlerName)
