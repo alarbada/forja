@@ -12,24 +12,44 @@ import (
 
 type Handler[P any, R any] func(c echo.Context, params P) (R, error)
 
-type TypedHandlers struct {
+// Forja is the main struct that handles type information for every given handler.
+// To add handlers to it use
+type Forja struct {
 	e        *echo.Echo
 	handlers map[string]reflect.Type // "package.handler" -> Handler type
 
-	OnErr func(error)
+	config Config
 }
 
-func NewTypedHandlersWithErrorHandler(e *echo.Echo, onErr func(error)) *TypedHandlers {
-	th := &TypedHandlers{
+func NewForja(e *echo.Echo) *Forja {
+	return NewForjaWithConfig(e, Config{Path: "/"})
+}
+
+type Config struct {
+	// OnErr, if not nil will be called if the handler responds with an error
+	OnErr func(error)
+
+	// Path is where the handlers will be mounted to. By default the handlers are
+	// mounted at the root path '/'.
+	// For example, with empty path:
+	// /main_myHandler
+	// With "/api" as the given path:
+	// /api/main_myHandler
+	// No further parsing is done to the path. Make sure that the path has a "/" path prefixed.
+	Path string
+}
+
+func NewForjaWithConfig(e *echo.Echo, config Config) *Forja {
+	if config.Path == "" {
+		config.Path = "/"
+	}
+
+	th := &Forja{
 		e:        e,
-		OnErr:    onErr,
+		config:   config,
 		handlers: make(map[string]reflect.Type),
 	}
 	return th
-}
-
-func NewTypedHandlers(e *echo.Echo) *TypedHandlers {
-	return NewTypedHandlersWithErrorHandler(e, nil)
 }
 
 func cleanHandlerName(handlerName string) string {
@@ -40,7 +60,7 @@ func cleanHandlerName(handlerName string) string {
 	return handlerName
 }
 
-func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
+func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 	handlerFunc := runtime.FuncForPC(reflect.ValueOf(handler).Pointer())
 	fullName := handlerFunc.Name()
 
@@ -72,8 +92,8 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 
 		result, err := handler(c, params)
 		if err != nil {
-			if th.OnErr != nil {
-				th.OnErr(err)
+			if th.config.OnErr != nil {
+				th.config.OnErr(err)
 			}
 
 			return c.JSON(400, map[string]string{
@@ -85,12 +105,12 @@ func AddHandler[P any, R any](th *TypedHandlers, handler Handler[P, R]) {
 	})
 }
 
-func (th *TypedHandlers) WriteTsClient(path string) error {
+func (th *Forja) WriteTsClient(path string) error {
 	generated := th.GenerateTypescriptClient()
 	return os.WriteFile(path, []byte(generated), 0644)
 }
 
-func (th *TypedHandlers) GenerateTypescriptClient() string {
+func (th *Forja) GenerateTypescriptClient() string {
 	output := new(strings.Builder)
 
 	// Generate ApiError type and ApiResponse type
@@ -259,7 +279,7 @@ export function createApiClient(
 	return output.String()
 }
 
-func WriteToFile(th *TypedHandlers, filename string) error {
+func WriteToFile(th *Forja, filename string) error {
 	generated := []byte(th.GenerateTypescriptClient())
 	return os.WriteFile(filename, generated, 0644)
 }

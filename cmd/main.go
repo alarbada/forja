@@ -80,7 +80,7 @@ func circular(c echo.Context, input *struct{}) (*Node, error) {
 
 func main() {
 	e := echo.New()
-	th := forja.NewTypedHandlers(e)
+	th := forja.NewForja(e)
 
 	forja.AddHandler(th, ExampleHandler1)
 	forja.AddHandler(th, ExampleHandler2)
