@@ -14,7 +14,7 @@ import (
 type Handler[P any, R any] func(c echo.Context, params P) (R, error)
 
 type Router interface {
-	POST(string, func(echo.Context) error)
+	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
 }
 
 // Forja is the main struct that handles type information for every given handler.
@@ -29,6 +29,9 @@ type Forja struct {
 func NewForja(router Router) *Forja {
 	return NewForjaWithConfig(router, Config{Path: "/"})
 }
+
+var fuck = echo.New()
+var _ = NewForja(fuck.Group("lalala"))
 
 type Config struct {
 	// OnErr, if not nil will be called if the handler responds with an error
