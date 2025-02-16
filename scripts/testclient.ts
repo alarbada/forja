@@ -1,4 +1,4 @@
-import { createApiClient } from './apiclient'
+import { createApiClient, main_PointersAreUndefined } from './apiclient'
 
 const apiclient = createApiClient('http://localhost:8080', {
   beforeRequest(config) {
@@ -29,4 +29,22 @@ console.log('Server_theHandler:', await apiclient.main.Server_theHandler())
 console.log(
   'Server_theHandlerPtr:',
   await apiclient.main.Server_theHandlerPtr(),
+)
+
+let ptrs: main_PointersAreUndefined = {}
+console.log(
+  'weHandleInputPointers:',
+  await apiclient.main.weHandleInputPointers(ptrs),
+)
+
+console.log(
+  'weAlsoHandleEnums opt 1 result',
+  await apiclient.main.weAlsoHandleEnums({ Opt1: 'hello' }),
+)
+
+console.log(
+  'weAlsoHandleEnums opt 2 result',
+  await apiclient.main.weAlsoHandleEnums({
+    Opt2: { name: 'john salchichon', age: 28 },
+  }),
 )

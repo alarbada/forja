@@ -78,6 +78,60 @@ func circular(c echo.Context, input *struct{}) (*Node, error) {
 	return nil, nil
 }
 
+// PointersAreUndefined, so that we don't need to fill them in our typescript definitions
+type PointersAreUndefined struct {
+	APtr       *string
+	AnotherPtr *struct{ Name string }
+}
+
+type weHandleInputPointersOutput struct {
+	APtrIsUndefined       bool
+	AnotherPtrIsUndefined bool
+}
+
+func weHandleInputPointers(
+	c echo.Context, input PointersAreUndefined,
+) (*weHandleInputPointersOutput, error) {
+	var res weHandleInputPointersOutput
+	if input.APtr == nil {
+		res.APtrIsUndefined = true
+	}
+	if input.AnotherPtr == nil {
+		res.AnotherPtrIsUndefined = true
+	}
+
+	return &res, nil
+}
+
+// Yeah, ik, golang does not have enums, so this is the best I can think of to
+// encode enums. I cannot think of a way to make the tag approach (have an int
+// or string indicating which option is valid) work, as we cannot obtain all possible
+// tag values by reflection.
+type EnumLike struct {
+	Opt1 forja.Option[string]
+	Opt2 forja.Option[struct {
+		Name string
+		Age  int
+	}]
+}
+
+type weAlsoHandleEnumsResult struct {
+	Opt1WasFilled bool
+	Opt2WasFilled bool
+}
+
+func weAlsoHandleEnums(c echo.Context, input EnumLike) (_ *weAlsoHandleEnumsResult, err error) {
+	var res weAlsoHandleEnumsResult
+	if input.Opt1.Valid() {
+		res.Opt1WasFilled = true
+	}
+	if input.Opt2.Valid() {
+		res.Opt2WasFilled = true
+	}
+
+	return &res, nil
+}
+
 func main() {
 	e := echo.New()
 	th := forja.NewForja(e)
@@ -93,6 +147,8 @@ func main() {
 	forja.AddHandler(th, server.theHandler)
 	forja.AddHandler(th, server.theHandlerPtr)
 	forja.AddHandler(th, circular)
+	forja.AddHandler(th, weHandleInputPointers)
+	forja.AddHandler(th, weAlsoHandleEnums)
 
 	forja.WriteToFile(th, "scripts/apiclient.ts")
 

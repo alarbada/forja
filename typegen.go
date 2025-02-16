@@ -32,6 +32,15 @@ func fillTypeDefinitions(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Struct:
 		fullName := getFullTypeName(t)
+		if strings.Contains(fullName, "forja_Option") {
+			for i := 0; i < t.NumField(); i++ {
+				field := t.Field(i)
+				if field.Name == "Value" {
+					return fillTypeDefinitions(field.Type)
+				}
+			}
+		}
+
 		if fullName != "" {
 			// Check if we're already processing this type (circular reference)
 			if processingTypes[fullName] {
@@ -53,8 +62,17 @@ func fillTypeDefinitions(t reflect.Type) string {
 				if jsonTag != "" {
 					fieldName = strings.Split(jsonTag, ",")[0]
 				}
+
 				fieldType := fillTypeDefinitions(field.Type)
-				fields = append(fields, fmt.Sprintf("  %s: %s", fieldName, fieldType))
+				if field.Type.Kind() == reflect.Ptr {
+					fmt.Println(fieldName, fieldType)
+					fields = append(fields, fmt.Sprintf("  %s?: %s", fieldName, fieldType))
+				} else if strings.Contains(getFullTypeName(field.Type), "forja_Option") {
+					fields = append(fields, fmt.Sprintf("  %s?: %s", fieldName, fieldType))
+				} else {
+					fields = append(fields, fmt.Sprintf("  %s: %s", fieldName, fieldType))
+				}
+
 			}
 
 			// Remove from processing map after we're done
@@ -75,7 +93,12 @@ func fillTypeDefinitions(t reflect.Type) string {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
 			fieldType := fillTypeDefinitions(field.Type)
-			fields = append(fields, fmt.Sprintf("  %s: %s", jsonTag, fieldType))
+			optional := ""
+			if field.Type.Kind() == reflect.Ptr {
+				fieldType = fillTypeDefinitions(field.Type.Elem())
+				optional = "?"
+			}
+			fields = append(fields, fmt.Sprintf("  %s%s: %s", jsonTag, optional, fieldType))
 		}
 		return fmt.Sprintf("{\n%s\n}", strings.Join(fields, "\n"))
 

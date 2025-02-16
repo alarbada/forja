@@ -1,6 +1,7 @@
 package forja
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -291,4 +292,36 @@ func camelcaseNames(names ...string) string {
 		}
 	}
 	return strings.Join(names, "")
+}
+
+// Option is a special type that makes it easy to encode optional values and
+// enums (see examples). We do not support generics (yet), so this type is handled
+// as a separate entity when "compiling" types to typescript.
+type Option[T any] struct {
+	IsValid bool
+	Value   T
+}
+
+func (x *Option[T]) Valid() bool {
+	if x == nil {
+		return false
+	}
+
+	return x.IsValid
+}
+
+func (x *Option[T]) MarshalJSON() ([]byte, error) {
+	if x.IsValid {
+		return json.Marshal(x.Value)
+	}
+	return json.Marshal(nil)
+}
+
+func (x *Option[T]) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		x.IsValid = false
+		return nil
+	}
+	x.IsValid = true
+	return json.Unmarshal(data, &x.Value)
 }
