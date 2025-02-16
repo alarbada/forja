@@ -30,9 +30,6 @@ func NewForja(router Router) *Forja {
 	return NewForjaWithConfig(router, Config{Path: "/"})
 }
 
-var fuck = echo.New()
-var _ = NewForja(fuck.Group("lalala"))
-
 type Config struct {
 	// OnErr, if not nil will be called if the handler responds with an error
 	OnErr func(error)
