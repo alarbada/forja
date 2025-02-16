@@ -13,17 +13,21 @@ import (
 
 type Handler[P any, R any] func(c echo.Context, params P) (R, error)
 
+type Router interface {
+	POST(string, func(echo.Context) error)
+}
+
 // Forja is the main struct that handles type information for every given handler.
 // To add handlers to it use
 type Forja struct {
-	e        *echo.Echo
+	router   Router
 	handlers map[string]reflect.Type // "package.handler" -> Handler type
 
 	config Config
 }
 
-func NewForja(e *echo.Echo) *Forja {
-	return NewForjaWithConfig(e, Config{Path: "/"})
+func NewForja(router Router) *Forja {
+	return NewForjaWithConfig(router, Config{Path: "/"})
 }
 
 type Config struct {
@@ -40,13 +44,13 @@ type Config struct {
 	Path string
 }
 
-func NewForjaWithConfig(e *echo.Echo, config Config) *Forja {
+func NewForjaWithConfig(router Router, config Config) *Forja {
 	if config.Path == "" {
 		config.Path = "/"
 	}
 
 	th := &Forja{
-		e:        e,
+		router:   router,
 		config:   config,
 		handlers: make(map[string]reflect.Type),
 	}
@@ -85,7 +89,7 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 
 	th.handlers[fullPath] = reflect.TypeOf(handler)
 
-	th.e.POST(path, func(c echo.Context) error {
+	th.router.POST(path, func(c echo.Context) error {
 		var params P
 		if err := c.Bind(&params); err != nil {
 			return echo.NewHTTPError(400, err.Error())
