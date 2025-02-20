@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -20,8 +21,10 @@ type Router interface {
 // Forja is the main struct that handles type information for every given handler.
 // To add handlers to it use
 type Forja struct {
-	router   Router
-	handlers map[string]reflect.Type // "package.handler" -> Handler type
+	router      Router
+	handlers    map[string]reflect.Type // "package.handler" -> Handler type
+	customTypes []reflect.Type
+	typegen     *typegen
 
 	config Config
 }
@@ -32,7 +35,7 @@ func NewForja(router Router) *Forja {
 
 type Config struct {
 	// OnErr, if not nil will be called if the handler responds with an error
-	OnErr func(error)
+	OnErr func(c echo.Context, err error) error
 
 	// Path is where the handlers will be mounted to. By default the handlers are
 	// mounted at the root path '/'.
@@ -53,6 +56,7 @@ func NewForjaWithConfig(router Router, config Config) *Forja {
 		router:   router,
 		config:   config,
 		handlers: make(map[string]reflect.Type),
+		typegen:  newTypegen(),
 	}
 	return th
 }
@@ -84,7 +88,7 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 	// (*Mystruct)_methodName
 	handlerName = cleanHandlerName(handlerName)
 
-	path := fmt.Sprintf("/%s.%s", packageName, handlerName)
+	path := fmt.Sprintf("%s.%s", filepath.Join(th.config.Path, packageName), handlerName)
 	fullPath := fmt.Sprintf("%s.%s", packageName, handlerName)
 
 	th.handlers[fullPath] = reflect.TypeOf(handler)
@@ -98,7 +102,7 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 		result, err := handler(c, params)
 		if err != nil {
 			if th.config.OnErr != nil {
-				th.config.OnErr(err)
+				err = th.config.OnErr(c, err)
 			}
 
 			return c.JSON(400, map[string]string{
@@ -110,12 +114,12 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 	})
 }
 
-func (th *Forja) WriteTsClient(path string) error {
-	generated := th.GenerateTypescriptClient()
+func (fj *Forja) WriteTsClient(path string) error {
+	generated := fj.GenerateTypescriptClient()
 	return os.WriteFile(path, []byte(generated), 0644)
 }
 
-func (th *Forja) GenerateTypescriptClient() string {
+func (fj *Forja) GenerateTypescriptClient() string {
 	output := new(strings.Builder)
 
 	// Generate ApiError type and ApiResponse type
@@ -141,7 +145,7 @@ export type ApiResponse<T> =
 	type Packages = map[PackageName]map[HandlerName]*Handler
 
 	packages := make(Packages)
-	for fullPath, handlerType := range th.handlers {
+	for fullPath, handlerType := range fj.handlers {
 		parts := strings.Split(fullPath, ".")
 		if len(parts) != 2 {
 			continue
@@ -166,8 +170,8 @@ export type ApiResponse<T> =
 			_, _, _ = packageName, handlerName, handler.handlerType
 			inputType := handler.handlerType.In(1)
 			outputType := handler.handlerType.Out(0).Elem()
-			inputTypeName := fillTypeDefinitions(inputType)
-			outputTypeName := fillTypeDefinitions(outputType)
+			inputTypeName := fj.typegen.FillTypeDefinitions(inputType)
+			outputTypeName := fj.typegen.FillTypeDefinitions(outputType)
 
 			handlerTsName := camelcaseNames(packageName, handlerName, "Handler")
 
@@ -201,13 +205,15 @@ export type ApiResponse<T> =
 	}
 	fmt.Fprintln(output, "}")
 
-	printTypeDefs(output)
+	fj.typegen.printTypeDefs(output)
 
 	// Generate createApiClient function
 	output.WriteString(`
-type ApiClientConfig = {
+export type ApiClientConfig = {
   beforeRequest?: (config: RequestInit) => void | Promise<void>
 }
+
+export const REQUEST_ABORTED = 'REQUEST_ABORTED'
 
 export function createApiClient(
   baseUrl: string,
@@ -244,11 +250,19 @@ export function createApiClient(
       const data = await response.json()
       return { data, error: null }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return {
+          data: null,
+          error: {
+            message: REQUEST_ABORTED,
+          },
+        }
+      }
       return {
         data: null,
         error: {
           message:
-            error instanceof Error ? error.message : "Unknown error occurred",
+            error instanceof Error ? error.message : 'Unknown error occurred',
         },
       }
     }
@@ -281,7 +295,15 @@ export function createApiClient(
 }
 `)
 
+	for _, typ := range fj.customTypes {
+		output.WriteString(fj.typegen.generateTypeDefinition(typ))
+	}
+
 	return output.String()
+}
+
+func (fj *Forja) AddType(typ any) {
+	fj.customTypes = append(fj.customTypes, reflect.TypeOf(typ))
 }
 
 func WriteToFile(th *Forja, filename string) error {

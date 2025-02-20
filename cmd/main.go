@@ -134,23 +134,23 @@ func weAlsoHandleEnums(c echo.Context, input EnumLike) (_ *weAlsoHandleEnumsResu
 
 func main() {
 	e := echo.New()
-	th := forja.NewForja(e)
+	fj := forja.NewForja(e)
 
-	forja.AddHandler(th, ExampleHandler1)
-	forja.AddHandler(th, ExampleHandler2)
-	forja.AddHandler(th, HelloWorld)
-	forja.AddHandler(th, pkg.SomeHandler)
-	forja.AddHandler(th, getPlaylists)
-	forja.AddHandler(th, ExampleWithExternalTypes)
+	forja.AddHandler(fj, ExampleHandler1)
+	forja.AddHandler(fj, ExampleHandler2)
+	forja.AddHandler(fj, HelloWorld)
+	forja.AddHandler(fj, pkg.SomeHandler)
+	forja.AddHandler(fj, getPlaylists)
+	forja.AddHandler(fj, ExampleWithExternalTypes)
 
 	server := Server{}
-	forja.AddHandler(th, server.theHandler)
-	forja.AddHandler(th, server.theHandlerPtr)
-	forja.AddHandler(th, circular)
-	forja.AddHandler(th, weHandleInputPointers)
-	forja.AddHandler(th, weAlsoHandleEnums)
+	forja.AddHandler(fj, server.theHandler)
+	forja.AddHandler(fj, server.theHandlerPtr)
+	forja.AddHandler(fj, circular)
+	forja.AddHandler(fj, weHandleInputPointers)
+	forja.AddHandler(fj, weAlsoHandleEnums)
 
-	forja.WriteToFile(th, "scripts/apiclient.ts")
+	forja.WriteToFile(fj, "scripts/apiclient.ts")
 
 	e.Logger.Fatal(e.Start(":8080"))
 }

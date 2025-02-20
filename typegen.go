@@ -6,11 +6,20 @@ import (
 	"strings"
 )
 
-var typeDefinitions = make(map[string]string)
-var processingTypes = make(map[string]bool)
+type typegen struct {
+	typeDefs        map[string]string
+	processingTypes map[string]bool
+}
 
-func printTypeDefs(sb *strings.Builder) {
-	for _, typedef := range typeDefinitions {
+func newTypegen() *typegen {
+	return &typegen{
+		typeDefs:        make(map[string]string),
+		processingTypes: make(map[string]bool),
+	}
+}
+
+func (x *typegen) printTypeDefs(sb *strings.Builder) {
+	for _, typedef := range x.typeDefs {
 		fmt.Fprintln(sb, typedef)
 	}
 }
@@ -28,7 +37,7 @@ func getFullTypeName(t reflect.Type) string {
 	return name
 }
 
-func fillTypeDefinitions(t reflect.Type) string {
+func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Struct:
 		fullName := getFullTypeName(t)
@@ -36,23 +45,23 @@ func fillTypeDefinitions(t reflect.Type) string {
 			for i := 0; i < t.NumField(); i++ {
 				field := t.Field(i)
 				if field.Name == "Value" {
-					return fillTypeDefinitions(field.Type)
+					return x.FillTypeDefinitions(field.Type)
 				}
 			}
 		}
 
 		if fullName != "" {
 			// Check if we're already processing this type (circular reference)
-			if processingTypes[fullName] {
+			if x.processingTypes[fullName] {
 				return fullName // Just return the type name for circular references
 			}
 
-			if _, exists := typeDefinitions[fullName]; exists {
+			if _, exists := x.typeDefs[fullName]; exists {
 				return fullName
 			}
 
 			// Mark this type as being processed
-			processingTypes[fullName] = true
+			x.processingTypes[fullName] = true
 
 			var fields []string
 			for i := 0; i < t.NumField(); i++ {
@@ -63,9 +72,8 @@ func fillTypeDefinitions(t reflect.Type) string {
 					fieldName = strings.Split(jsonTag, ",")[0]
 				}
 
-				fieldType := fillTypeDefinitions(field.Type)
+				fieldType := x.FillTypeDefinitions(field.Type)
 				if field.Type.Kind() == reflect.Ptr {
-					fmt.Println(fieldName, fieldType)
 					fields = append(fields, fmt.Sprintf("  %s?: %s", fieldName, fieldType))
 				} else if strings.Contains(getFullTypeName(field.Type), "forja_Option") {
 					fields = append(fields, fmt.Sprintf("  %s?: %s", fieldName, fieldType))
@@ -76,9 +84,9 @@ func fillTypeDefinitions(t reflect.Type) string {
 			}
 
 			// Remove from processing map after we're done
-			delete(processingTypes, fullName)
+			delete(x.processingTypes, fullName)
 
-			typeDefinitions[fullName] = fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n"))
+			x.typeDefs[fullName] = fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n"))
 			return fullName
 		}
 
@@ -92,10 +100,10 @@ func fillTypeDefinitions(t reflect.Type) string {
 			} else {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
-			fieldType := fillTypeDefinitions(field.Type)
+			fieldType := x.FillTypeDefinitions(field.Type)
 			optional := ""
 			if field.Type.Kind() == reflect.Ptr {
-				fieldType = fillTypeDefinitions(field.Type.Elem())
+				fieldType = x.FillTypeDefinitions(field.Type.Elem())
 				optional = "?"
 			}
 			fields = append(fields, fmt.Sprintf("  %s%s: %s", jsonTag, optional, fieldType))
@@ -103,7 +111,7 @@ func fillTypeDefinitions(t reflect.Type) string {
 		return fmt.Sprintf("{\n%s\n}", strings.Join(fields, "\n"))
 
 	case reflect.Slice:
-		return fmt.Sprintf("(%s[] | null)", fillTypeDefinitions(t.Elem()))
+		return fmt.Sprintf("(%s[] | null)", x.FillTypeDefinitions(t.Elem()))
 	case reflect.String:
 		return "string"
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -113,8 +121,21 @@ func fillTypeDefinitions(t reflect.Type) string {
 	case reflect.Bool:
 		return "boolean"
 	case reflect.Ptr:
-		return fillTypeDefinitions(t.Elem())
+		return x.FillTypeDefinitions(t.Elem())
 	default:
 		return "any"
 	}
+}
+
+func (x *typegen) generateTypeDefinition(t reflect.Type) string {
+	typename := x.FillTypeDefinitions(t)
+
+	var sb strings.Builder
+
+	if typename == "" {
+		panic("Anonymous type not supported")
+	}
+
+	fmt.Fprintln(&sb, x.typeDefs[typename])
+	return sb.String()
 }
