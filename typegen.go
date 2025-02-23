@@ -62,6 +62,10 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Struct:
 		fullName := getFullTypeName(t)
+		if t.PkgPath() == "time" && t.Name() == "Time" {
+			return "string"
+		}
+
 		if strings.Contains(fullName, "forja_Option") {
 			for i := 0; i < t.NumField(); i++ {
 				field := t.Field(i)

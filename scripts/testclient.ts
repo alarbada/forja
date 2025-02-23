@@ -13,29 +13,23 @@ console.log(
   'ExampleHandler1:',
   await apiclient.main.ExampleHandler1({
     name: 'name',
-    users: [{ name: 'name', age: 0 }],
+    users: [{ name: 'name', age: 0, created: '' }],
   }),
 )
 console.log(
   'ExampleHandler2:',
   await apiclient.main.ExampleHandler2({
     name: 'name',
-    users: [{ name: 'name', age: 0 }],
+    users: [{ name: 'name', age: 0, created: '' }],
   }),
 )
 console.log('SomeHandler:', await apiclient.pkg.SomeHandler())
 console.log('getPlaylists:', await apiclient.main.getPlaylists())
 console.log('Server_theHandler:', await apiclient.main.Server_theHandler())
-console.log(
-  'Server_theHandlerPtr:',
-  await apiclient.main.Server_theHandlerPtr(),
-)
+console.log('Server_theHandlerPtr:', await apiclient.main.Server_theHandlerPtr())
 
 let ptrs: main_PointersAreUndefined = {}
-console.log(
-  'weHandleInputPointers:',
-  await apiclient.main.weHandleInputPointers(ptrs),
-)
+console.log('weHandleInputPointers:', await apiclient.main.weHandleInputPointers(ptrs))
 
 console.log(
   'weAlsoHandleEnums opt 1 result',
