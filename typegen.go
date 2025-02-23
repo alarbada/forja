@@ -37,6 +37,27 @@ func getFullTypeName(t reflect.Type) string {
 	return name
 }
 
+func escapeFieldName(name string) string {
+	// If empty, needs quotes
+	if name == "" {
+		return "''"
+	}
+
+	// Check first character - must start with letter, underscore, or dollar sign
+	if !strings.ContainsAny(string(name[0]), "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$") {
+		return "'" + name + "'"
+	}
+
+	// Check rest of string - can only contain letters, numbers, underscore, or dollar sign
+	for _, ch := range name[1:] {
+		if !strings.ContainsAny(string(ch), "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$") {
+			return "'" + name + "'"
+		}
+	}
+
+	return name
+}
+
 func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Struct:
@@ -71,6 +92,7 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 				if jsonTag != "" {
 					fieldName = strings.Split(jsonTag, ",")[0]
 				}
+				fieldName = escapeFieldName(fieldName)
 
 				fieldType := x.FillTypeDefinitions(field.Type)
 				if field.Type.Kind() == reflect.Ptr {
@@ -100,6 +122,7 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 			} else {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
+			jsonTag = escapeFieldName(jsonTag)
 			fieldType := x.FillTypeDefinitions(field.Type)
 			optional := ""
 			if field.Type.Kind() == reflect.Ptr {

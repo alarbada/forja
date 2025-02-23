@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/alarbada/forja"
 	"github.com/alarbada/forja/cmd/nested/pkg"
 
@@ -9,8 +11,9 @@ import (
 )
 
 type User struct {
-	Name string `json:"name"`
-	Age  int    `json:"age"`
+	Name    string    `json:"name"`
+	Age     int       `json:"age"`
+	Created time.Time `json:"created"`
 }
 
 type ExampleParams struct {

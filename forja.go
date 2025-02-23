@@ -195,7 +195,7 @@ export type ApiResponse<T> =
 		}
 	}
 
-	fmt.Fprintln(output, "type ApiClient = {")
+	fmt.Fprintln(output, "export type ApiClient = {")
 	for packageName, packageTypeDef := range apiClientTsDefinitions {
 		fmt.Fprintln(output, "  ", packageName, ": {")
 		for handlerName, handlerTypeName := range packageTypeDef {
