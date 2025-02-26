@@ -153,6 +153,50 @@ func main() {
 	forja.AddHandler(fj, weHandleInputPointers)
 	forja.AddHandler(fj, weAlsoHandleEnums)
 
+	// Add custom variables to be exported in the TypeScript client
+
+	// Simple primitive values
+	fj.AddVariable("API_VERSION", "1.0.0")
+	fj.AddVariable("MAX_RETRIES", 3)
+	fj.AddVariable("DEBUG_MODE", true)
+
+	// Complex objects
+	fj.AddVariable("DEFAULT_USER", User{
+		Name:    "John Doe",
+		Age:     30,
+		Created: time.Now(),
+	})
+
+	// Arrays/slices
+	fj.AddVariable("SUPPORTED_FORMATS", []string{"json", "xml", "yaml"})
+
+	// Maps
+	fj.AddConstVariable("ERROR_CODES", map[string]int{
+		"NOT_FOUND":    404,
+		"UNAUTHORIZED": 401,
+		"SERVER_ERROR": 500,
+		"BAD_REQUEST":  400,
+		"RATE_LIMITED": 429,
+	})
+
+	// Nested complex structures
+	fj.AddVariable("SAMPLE_PLAYLISTS", []Playlist{
+		{
+			ID:          "pl1",
+			PlaylistID:  "playlist1",
+			Title:       "My Favorites",
+			Pinned:      true,
+			Description: "A collection of my favorite songs",
+		},
+		{
+			ID:          "pl2",
+			PlaylistID:  "playlist2",
+			Title:       "Workout Mix",
+			Pinned:      false,
+			Description: "Songs for the gym",
+		},
+	})
+
 	forja.WriteToFile(fj, "scripts/apiclient.ts")
 
 	e.Logger.Fatal(e.Start(":8080"))

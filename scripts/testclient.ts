@@ -25,8 +25,8 @@ console.log(
 )
 console.log('SomeHandler:', await apiclient.pkg.SomeHandler())
 console.log('getPlaylists:', await apiclient.main.getPlaylists())
-console.log('Server_theHandler:', await apiclient.main.Server_theHandler())
-console.log('Server_theHandlerPtr:', await apiclient.main.Server_theHandlerPtr())
+console.log('theHandler:', await apiclient.main.theHandler())
+console.log('theHandlerPtr:', await apiclient.main.theHandlerPtr())
 
 let ptrs: main_PointersAreUndefined = {}
 console.log('weHandleInputPointers:', await apiclient.main.weHandleInputPointers(ptrs))
