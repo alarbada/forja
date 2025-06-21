@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"reflect"
 	"runtime"
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 type Handler[P any, R any] func(c echo.Context, params P) (R, error)
@@ -22,43 +23,32 @@ type Router interface {
 // To add handlers to it use
 type Forja struct {
 	router         Router
-	handlers       map[string]reflect.Type // "package.handler" -> Handler type
+	handlers       *orderedmap.OrderedMap[string, reflect.Type] // "package.handler" -> Handler type
 	customTypes    []reflect.Type
 	typegen        *typegen
-	variables      map[string]any // Custom variables to export in the TypeScript client
-	constVariables map[string]any // Custom const variables to export with "as const"
+	variables      *orderedmap.OrderedMap[string, any] // Custom variables to export in the TypeScript client
+	constVariables *orderedmap.OrderedMap[string, any] // Custom const variables to export with "as const"
 
 	config Config
 }
 
 func NewForja(router Router) *Forja {
-	return NewForjaWithConfig(router, Config{Path: "/"})
+	return NewForjaWithConfig(router, Config{})
 }
 
 type Config struct {
 	// OnErr, if not nil will be called if the handler responds with an error
 	OnErr func(c echo.Context, err error) error
-
-	// Path is where the handlers will be mounted to. By default the handlers are
-	// mounted at the root path '/'.
-	// For example, with empty path:
-	// /main_myHandler
-	// With "/api" as the given path:
-	// /api/main_myHandler
-	// No further parsing is done to the path. Make sure that the path has a "/" path prefixed.
-	Path string
 }
 
 func NewForjaWithConfig(router Router, config Config) *Forja {
-	if config.Path == "" {
-		config.Path = "/"
-	}
-
 	th := &Forja{
-		router:   router,
-		config:   config,
-		handlers: make(map[string]reflect.Type),
-		typegen:  newTypegen(),
+		router:         router,
+		config:         config,
+		handlers:       orderedmap.New[string, reflect.Type](),
+		typegen:        newTypegen(),
+		variables:      orderedmap.New[string, any](),
+		constVariables: orderedmap.New[string, any](),
 	}
 	return th
 }
@@ -95,10 +85,9 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 		handlerName = strings.Split(handlerName, "_")[1]
 	}
 
-	path := fmt.Sprintf("%s.%s", filepath.Join(th.config.Path, packageName), handlerName)
-	fullPath := fmt.Sprintf("%s.%s", packageName, handlerName)
+	path := fmt.Sprintf("%s.%s", packageName, handlerName)
 
-	th.handlers[fullPath] = reflect.TypeOf(handler)
+	th.handlers.Set(path, reflect.TypeOf(handler))
 
 	th.router.POST(path, func(c echo.Context) error {
 		var params P
@@ -136,8 +125,9 @@ func (fj *Forja) GenerateTypescriptClient() string {
 `)
 
 	// Export custom variables
-	if len(fj.variables) > 0 {
-		for name, value := range fj.variables {
+	if fj.variables != nil && fj.variables.Len() > 0 {
+		for pair := fj.variables.Oldest(); pair != nil; pair = pair.Next() {
+			name, value := pair.Key, pair.Value
 			jsonBytes, err := json.MarshalIndent(value, "", "  ")
 			if err != nil {
 				// If there's an error, add a comment explaining the issue
@@ -149,8 +139,9 @@ func (fj *Forja) GenerateTypescriptClient() string {
 	}
 
 	// Export custom const variables with "as const" assertion
-	if len(fj.constVariables) > 0 {
-		for name, value := range fj.constVariables {
+	if fj.constVariables != nil && fj.constVariables.Len() > 0 {
+		for pair := fj.constVariables.Oldest(); pair != nil; pair = pair.Next() {
+			name, value := pair.Key, pair.Value
 			jsonBytes, err := json.MarshalIndent(value, "", "  ")
 			if err != nil {
 				// If there's an error, add a comment explaining the issue
@@ -179,10 +170,11 @@ export type ApiResponse<T> =
 	}
 
 	// Handler is a pointer so that we can update isInputEmpty later.
-	type Packages = map[PackageName]map[HandlerName]*Handler
+	type Packages orderedmap.OrderedMap[PackageName, orderedmap.OrderedMap[HandlerName, *Handler]]
 
-	packages := make(Packages)
-	for fullPath, handlerType := range fj.handlers {
+	packages := orderedmap.New[PackageName, *orderedmap.OrderedMap[HandlerName, *Handler]]()
+	for pair := fj.handlers.Oldest(); pair != nil; pair = pair.Next() {
+		fullPath, handlerType := pair.Key, pair.Value
 		parts := strings.Split(fullPath, ".")
 		if len(parts) != 2 {
 			continue
@@ -190,20 +182,24 @@ export type ApiResponse<T> =
 		packageName, handlerName := parts[0], parts[1]
 		packageParts := strings.Split(packageName, "/")
 		simplifiedPackageName := packageParts[len(packageParts)-1]
-		if packages[simplifiedPackageName] == nil {
-			packages[simplifiedPackageName] = make(map[HandlerName]*Handler)
+		packageMap, exists := packages.Get(simplifiedPackageName)
+		if !exists {
+			packageMap = orderedmap.New[HandlerName, *Handler]()
+			packages.Set(simplifiedPackageName, packageMap)
 		}
-		packages[simplifiedPackageName][handlerName] = &Handler{
+		packageMap.Set(handlerName, &Handler{
 			isInputEmpty: false,
 			handlerType:  handlerType,
-		}
+		})
 	}
 
 	type HandlerTsType = string
-	apiClientTsDefinitions := map[PackageName]map[HandlerName]HandlerTsType{}
+	apiClientTsDefinitions := orderedmap.New[PackageName, *orderedmap.OrderedMap[HandlerName, HandlerTsType]]()
 
-	for packageName, handlers := range packages {
-		for handlerName, handler := range handlers {
+	for packagePair := packages.Oldest(); packagePair != nil; packagePair = packagePair.Next() {
+		packageName, handlers := packagePair.Key, packagePair.Value
+		for handlerPair := handlers.Oldest(); handlerPair != nil; handlerPair = handlerPair.Next() {
+			handlerName, handler := handlerPair.Key, handlerPair.Value
 			_, _, _ = packageName, handlerName, handler.handlerType
 			inputType := handler.handlerType.In(1)
 			outputType := handler.handlerType.Out(0).Elem()
@@ -214,7 +210,9 @@ export type ApiResponse<T> =
 
 			isInputEmptyStruct := inputType.Kind() == reflect.Struct && inputType.NumField() == 0
 			if isInputEmptyStruct {
-				packages[packageName][handlerName].isInputEmpty = true
+				handlerMap, _ := packages.Get(packageName)
+				handlerItem, _ := handlerMap.Get(handlerName)
+				handlerItem.isInputEmpty = true
 				fmt.Fprintf(output,
 					"type %s = () => Promise<ApiResponse<%s>>\n",
 					handlerTsName, outputTypeName)
@@ -224,18 +222,22 @@ export type ApiResponse<T> =
 					handlerTsName, inputTypeName, outputTypeName)
 			}
 
-			if apiClientTsDefinitions[packageName] == nil {
-				apiClientTsDefinitions[packageName] = map[string]string{}
+			packageMap, exists := apiClientTsDefinitions.Get(packageName)
+			if !exists {
+				packageMap = orderedmap.New[HandlerName, HandlerTsType]()
+				apiClientTsDefinitions.Set(packageName, packageMap)
 			}
 
-			apiClientTsDefinitions[packageName][handlerName] = handlerTsName
+			packageMap.Set(handlerName, handlerTsName)
 		}
 	}
 
 	fmt.Fprintln(output, "export type ApiClient = {")
-	for packageName, packageTypeDef := range apiClientTsDefinitions {
+	for pair := apiClientTsDefinitions.Oldest(); pair != nil; pair = pair.Next() {
+		packageName, packageTypeDef := pair.Key, pair.Value
 		fmt.Fprintln(output, "  ", packageName, ": {")
-		for handlerName, handlerTypeName := range packageTypeDef {
+		for handlerPair := packageTypeDef.Oldest(); handlerPair != nil; handlerPair = handlerPair.Next() {
+			handlerName, handlerTypeName := handlerPair.Key, handlerPair.Value
 			fmt.Fprintln(output, "    ", handlerName, ": ", handlerTypeName, ",")
 		}
 		fmt.Fprintln(output, "  ", "},")
@@ -308,9 +310,11 @@ export function createApiClient(
 `)
 
 	// Generate client methods
-	for packageName, handlers := range packages {
-		output.WriteString(fmt.Sprintf("    %s: {\n", packageName))
-		for handlerName, handler := range handlers {
+	for packagePair := packages.Oldest(); packagePair != nil; packagePair = packagePair.Next() {
+		packageName, handlers := packagePair.Key, packagePair.Value
+		fmt.Fprintf(output, "    %s: {\n", packageName)
+		for handlerPair := handlers.Oldest(); handlerPair != nil; handlerPair = handlerPair.Next() {
+			handlerName, handler := handlerPair.Key, handlerPair.Value
 			var callback string
 			if handler.isInputEmpty {
 				callback = fmt.Sprintf(
@@ -336,7 +340,9 @@ export function createApiClient(
 		output.WriteString(fj.typegen.generateTypeDefinition(typ))
 	}
 
-	return output.String()
+	result := output.String()
+
+	return result
 }
 
 func (fj *Forja) AddType(typ any) {
@@ -346,6 +352,14 @@ func (fj *Forja) AddType(typ any) {
 func WriteToFile(th *Forja, filename string) error {
 	generated := []byte(th.GenerateTypescriptClient())
 	return os.WriteFile(filename, generated, 0644)
+}
+
+func WriteToFileWithCmd(th *Forja, filename string, cmd *exec.Cmd) error {
+	if err := WriteToFile(th, filename); err != nil {
+		return err
+	}
+
+	return cmd.Run()
 }
 
 func camelcaseNames(names ...string) string {
@@ -365,28 +379,28 @@ type Option[T any] struct {
 	Value   T
 }
 
-func (x *Option[T]) Valid() bool {
-	if x == nil {
+func (o *Option[T]) Valid() bool {
+	if o == nil {
 		return false
 	}
 
-	return x.IsValid
+	return o.IsValid
 }
 
-func (x *Option[T]) MarshalJSON() ([]byte, error) {
-	if x.IsValid {
-		return json.Marshal(x.Value)
+func (o *Option[T]) MarshalJSON() ([]byte, error) {
+	if o.IsValid {
+		return json.Marshal(o.Value)
 	}
 	return json.Marshal(nil)
 }
 
-func (x *Option[T]) UnmarshalJSON(data []byte) error {
+func (o *Option[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
-		x.IsValid = false
+		o.IsValid = false
 		return nil
 	}
-	x.IsValid = true
-	return json.Unmarshal(data, &x.Value)
+	o.IsValid = true
+	return json.Unmarshal(data, &o.Value)
 }
 
 // AddVariable adds a custom variable to be exported in the TypeScript client.
@@ -394,9 +408,9 @@ func (x *Option[T]) UnmarshalJSON(data []byte) error {
 func (fj *Forja) AddVariable(variableName string, value any) {
 	// Store the variable name and value
 	if fj.variables == nil {
-		fj.variables = make(map[string]any)
+		fj.variables = orderedmap.New[string, any]()
 	}
-	fj.variables[variableName] = value
+	fj.variables.Set(variableName, value)
 }
 
 // AddConstVariable adds a custom variable to be exported in the TypeScript client
@@ -405,7 +419,7 @@ func (fj *Forja) AddVariable(variableName string, value any) {
 func (fj *Forja) AddConstVariable(variableName string, value any) {
 	// Store the variable name and value with a flag indicating it should use "as const"
 	if fj.constVariables == nil {
-		fj.constVariables = make(map[string]any)
+		fj.constVariables = orderedmap.New[string, any]()
 	}
-	fj.constVariables[variableName] = value
+	fj.constVariables.Set(variableName, value)
 }

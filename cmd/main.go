@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os/exec"
 	"time"
 
 	"github.com/alarbada/forja"
@@ -164,7 +165,7 @@ func main() {
 	fj.AddVariable("DEFAULT_USER", User{
 		Name:    "John Doe",
 		Age:     30,
-		Created: time.Now(),
+		Created: time.Date(2023, time.March, 14, 15, 9, 26, 0, time.UTC),
 	})
 
 	// Arrays/slices
@@ -197,7 +198,8 @@ func main() {
 		},
 	})
 
-	forja.WriteToFile(fj, "scripts/apiclient.ts")
+	cmd := exec.Command("prettier", "-w", "scripts/apiclient.ts")
+	forja.WriteToFileWithCmd(fj, "scripts/apiclient.ts", cmd)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }

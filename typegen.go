@@ -4,23 +4,26 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 type typegen struct {
-	typeDefs        map[string]string
+	typeDefs        *orderedmap.OrderedMap[string, string]
 	processingTypes map[string]bool
 }
 
 func newTypegen() *typegen {
 	return &typegen{
-		typeDefs:        make(map[string]string),
+		typeDefs:        orderedmap.New[string, string](),
 		processingTypes: make(map[string]bool),
 	}
 }
 
-func (x *typegen) printTypeDefs(sb *strings.Builder) {
-	for _, typedef := range x.typeDefs {
-		fmt.Fprintln(sb, typedef)
+func (tp *typegen) printTypeDefs(sb *strings.Builder) {
+	// OrderedMap maintains insertion order, so we can iterate directly
+	for pair := tp.typeDefs.Oldest(); pair != nil; pair = pair.Next() {
+		fmt.Fprintln(sb, pair.Value)
 	}
 }
 
@@ -58,7 +61,7 @@ func escapeFieldName(name string) string {
 	return name
 }
 
-func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
+func (tp *typegen) FillTypeDefinitions(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Struct:
 		fullName := getFullTypeName(t)
@@ -70,23 +73,23 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 			for i := 0; i < t.NumField(); i++ {
 				field := t.Field(i)
 				if field.Name == "Value" {
-					return x.FillTypeDefinitions(field.Type)
+					return tp.FillTypeDefinitions(field.Type)
 				}
 			}
 		}
 
 		if fullName != "" {
 			// Check if we're already processing this type (circular reference)
-			if x.processingTypes[fullName] {
+			if tp.processingTypes[fullName] {
 				return fullName // Just return the type name for circular references
 			}
 
-			if _, exists := x.typeDefs[fullName]; exists {
+			if _, exists := tp.typeDefs.Get(fullName); exists {
 				return fullName
 			}
 
 			// Mark this type as being processed
-			x.processingTypes[fullName] = true
+			tp.processingTypes[fullName] = true
 
 			var fields []string
 			for i := 0; i < t.NumField(); i++ {
@@ -98,7 +101,7 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 				}
 				fieldName = escapeFieldName(fieldName)
 
-				fieldType := x.FillTypeDefinitions(field.Type)
+				fieldType := tp.FillTypeDefinitions(field.Type)
 				if field.Type.Kind() == reflect.Ptr {
 					fields = append(fields, fmt.Sprintf("  %s?: %s", fieldName, fieldType))
 				} else if strings.Contains(getFullTypeName(field.Type), "forja_Option") {
@@ -110,9 +113,9 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 			}
 
 			// Remove from processing map after we're done
-			delete(x.processingTypes, fullName)
+			delete(tp.processingTypes, fullName)
 
-			x.typeDefs[fullName] = fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n"))
+			tp.typeDefs.Set(fullName, fmt.Sprintf("export type %s = {\n%s\n}", fullName, strings.Join(fields, "\n")))
 			return fullName
 		}
 
@@ -127,10 +130,10 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
 			jsonTag = escapeFieldName(jsonTag)
-			fieldType := x.FillTypeDefinitions(field.Type)
+			fieldType := tp.FillTypeDefinitions(field.Type)
 			optional := ""
 			if field.Type.Kind() == reflect.Ptr {
-				fieldType = x.FillTypeDefinitions(field.Type.Elem())
+				fieldType = tp.FillTypeDefinitions(field.Type.Elem())
 				optional = "?"
 			}
 			fields = append(fields, fmt.Sprintf("  %s%s: %s", jsonTag, optional, fieldType))
@@ -138,7 +141,7 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 		return fmt.Sprintf("{\n%s\n}", strings.Join(fields, "\n"))
 
 	case reflect.Slice:
-		return fmt.Sprintf("(%s[] | null)", x.FillTypeDefinitions(t.Elem()))
+		return fmt.Sprintf("(%s[] | null)", tp.FillTypeDefinitions(t.Elem()))
 	case reflect.String:
 		return "string"
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -148,14 +151,14 @@ func (x *typegen) FillTypeDefinitions(t reflect.Type) string {
 	case reflect.Bool:
 		return "boolean"
 	case reflect.Ptr:
-		return x.FillTypeDefinitions(t.Elem())
+		return tp.FillTypeDefinitions(t.Elem())
 	default:
 		return "any"
 	}
 }
 
-func (x *typegen) generateTypeDefinition(t reflect.Type) string {
-	typename := x.FillTypeDefinitions(t)
+func (tp *typegen) generateTypeDefinition(t reflect.Type) string {
+	typename := tp.FillTypeDefinitions(t)
 
 	var sb strings.Builder
 
@@ -163,6 +166,7 @@ func (x *typegen) generateTypeDefinition(t reflect.Type) string {
 		panic("Anonymous type not supported")
 	}
 
-	fmt.Fprintln(&sb, x.typeDefs[typename])
+	typedef, _ := tp.typeDefs.Get(typename)
+	fmt.Fprintln(&sb, typedef)
 	return sb.String()
 }
