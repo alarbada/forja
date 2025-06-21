@@ -112,7 +112,11 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 
 func (fj *Forja) WriteTsClient(path string) error {
 	generated := fj.GenerateTypescriptClient()
-	return os.WriteFile(path, []byte(generated), 0644)
+	if err := os.WriteFile(path, []byte(generated), 0644); err != nil {
+		return fmt.Errorf("failed to write TypeScript client to %s: %w", path, err)
+	}
+
+	return nil
 }
 
 func (fj *Forja) WriteTsClientWithCommand(path string, cmd *exec.Cmd) error {
@@ -120,7 +124,11 @@ func (fj *Forja) WriteTsClientWithCommand(path string, cmd *exec.Cmd) error {
 		return err
 	}
 
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run command: %w", err)
+	}
+
+	return nil
 }
 
 func (fj *Forja) GenerateTypescriptClient() string {
