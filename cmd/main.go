@@ -199,7 +199,7 @@ func main() {
 	})
 
 	cmd := exec.Command("prettier", "-w", "scripts/apiclient.ts")
-	forja.WriteToFileWithCmd(fj, "scripts/apiclient.ts", cmd)
+	fj.WriteTsClientWithCommand("scripts/apiclient.ts", cmd)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }

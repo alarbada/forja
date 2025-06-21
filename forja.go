@@ -115,6 +115,14 @@ func (fj *Forja) WriteTsClient(path string) error {
 	return os.WriteFile(path, []byte(generated), 0644)
 }
 
+func (fj *Forja) WriteTsClientWithCommand(path string, cmd *exec.Cmd) error {
+	if err := fj.WriteTsClient(path); err != nil {
+		return err
+	}
+
+	return cmd.Run()
+}
+
 func (fj *Forja) GenerateTypescriptClient() string {
 	output := new(strings.Builder)
 
@@ -347,19 +355,6 @@ export function createApiClient(
 
 func (fj *Forja) AddType(typ any) {
 	fj.customTypes = append(fj.customTypes, reflect.TypeOf(typ))
-}
-
-func WriteToFile(th *Forja, filename string) error {
-	generated := []byte(th.GenerateTypescriptClient())
-	return os.WriteFile(filename, generated, 0644)
-}
-
-func WriteToFileWithCmd(th *Forja, filename string, cmd *exec.Cmd) error {
-	if err := WriteToFile(th, filename); err != nil {
-		return err
-	}
-
-	return cmd.Run()
 }
 
 func camelcaseNames(names ...string) string {
