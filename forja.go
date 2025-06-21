@@ -85,7 +85,7 @@ func AddHandler[P any, R any](th *Forja, handler Handler[P, R]) {
 		handlerName = strings.Split(handlerName, "_")[1]
 	}
 
-	path := fmt.Sprintf("%s.%s", packageName, handlerName)
+	path := fmt.Sprintf("/%s.%s", packageName, handlerName)
 
 	th.handlers.Set(path, reflect.TypeOf(handler))
 
